@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PolicyPilot</title>
+<style>
+:root{--bg:#eef2f1;--ink:#10231f;--mute:#5d6f6a;--line:#cdd8d5;--card:#fff;--teal:#0f6b5c;--amber:#e0a526;--red:#a4361a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,sans-serif}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:10px 24px;border-bottom:1px solid var(--line);background:var(--card)}
+header h1{font-size:18px;margin:0}
+nav button{border:0;background:none;padding:8px 12px;font:inherit;cursor:pointer;color:var(--mute);border-bottom:2px solid transparent}
+nav button.on{color:var(--ink);border-color:var(--teal);font-weight:600}
+main{max-width:980px;margin:0 auto;padding:24px 16px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:20px}
+.finder{display:grid;grid-template-columns:170px 1fr;gap:24px;align-items:center}
+.age label{display:block;color:var(--mute);font-size:13px}
+.age input{width:100%;font-size:64px;font-weight:700;border:0;border-bottom:3px solid var(--amber);background:none;color:var(--ink);padding:0;outline:none;font-family:Georgia,serif}
+.opts,.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:12px}
+.opts label,.form label{font-size:13px;color:var(--mute);display:block}
+input,select{width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font:inherit;background:#fff}
+.summary{margin:0 0 12px;color:var(--mute)}
+.result{display:grid;grid-template-columns:1fr auto;gap:8px 20px;padding:16px;border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:8px;margin-bottom:10px;background:var(--card)}
+.result h3{margin:0;font-size:16px}
+.meta,.note{color:var(--mute);font-size:13px}
+.tag{display:inline-block;background:#e3efec;color:var(--teal);border-radius:4px;padding:1px 8px;font-size:12px;margin-right:6px}
+.price{text-align:right}.price b{font-size:22px;font-family:Georgia,serif}
+.empty{padding:24px;text-align:center;color:var(--mute)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line)}
+.wide{grid-column:1/-1}
+button.btn{background:var(--teal);color:#fff;border:0;border-radius:6px;padding:9px 16px;font:inherit;cursor:pointer}
+button.alt{background:#fff;color:var(--ink);border:1px solid var(--line)}
+button.link{background:none;border:0;color:var(--teal);cursor:pointer;font:inherit;padding:0 6px}
+.err{color:var(--red);font-size:13px}
+.hide{display:none}
+#authBox{max-width:380px;margin:60px auto}
+@media(max-width:640px){.finder{grid-template-columns:1fr}.result{grid-template-columns:1fr}.price{text-align:left}}
+</style>
+</head>
+<body>
+
+<div id="authScreen" class="hide">
+  <div id="authBox" class="panel">
+    <h1 style="margin:0 0 4px;font-family:Georgia,serif;color:var(--teal)">PolicyPilot</h1>
+    <p class="meta" style="margin:0 0 16px">Quotes, clients and policies in one place.</p>
+    <h2 id="authTitle" style="margin-top:0;font-size:18px">Sign in</h2>
+    <div class="form" style="grid-template-columns:1fr">
+      <div id="nameRow" class="hide"><label>Your name</label><input id="aName"></div>
+      <div id="orgRow" class="hide"><label>Company or agency name</label><input id="aOrg"><div class="note">Skip this if you were invited to join a team.</div></div>
+      <div><label>Email</label><input id="aEmail" type="email"></div>
+      <div><label>Password</label><input id="aPass" type="password"></div>
+    </div>
+    <button class="btn" id="authBtn">Sign in</button>
+    <button class="link" id="authSwitch">Create an account</button>
+    <p class="err" id="authErr"></p>
+  </div>
+</div>
+
+<div id="app" class="hide">
+  <header>
+    <h1><span id="brandName">PolicyPilot</span> <span id="orgTitle" class="meta"></span></h1>
+    <nav>
+      <button data-tab="quote" class="on">Quote</button>
+      <button data-tab="clients">Clients</button>
+      <button data-tab="policies">Policies</button>
+      <button data-tab="products" class="adminOnly">Products</button>
+      <button data-tab="team" class="adminOnly">Team</button>
+      <button id="logoutBtn">Sign out</button>
+    </nav>
+  </header>
+  <main>
+
+    <section id="tab-quote">
+      <div class="panel finder">
+        <div class="age"><label for="age">Client age</label><input id="age" type="number" min="0" max="100" value="30"></div>
+        <div class="opts">
+          <div><label>Coverage (PHP)</label><input id="coverage" type="number" value="1000000" step="50000"></div>
+          <div><label>Smoker</label><select id="smoker"><option value="no">Non-smoker</option><option value="yes">Smoker</option></select></div>
+          <div><label>Payment mode</label><select id="mode"><option value="1">Annual</option><option value="0.52">Semi-annual</option><option value="0.27">Quarterly</option><option value="0.0917">Monthly</option></select></div>
+          <div><label>Policy type</label><select id="typeFilter"><option value="">All types</option></select></div>
+        </div>
+      </div>
+      <p class="summary" id="summary"></p>
+      <div id="results"></div>
+      <div id="convertBox" class="panel hide">
+        <h3 id="convertTitle" style="margin-top:0"></h3>
+        <div class="form">
+          <div><label>Client</label><select id="cClient"></select></div>
+          <div class="newClient"><label>New client name</label><input id="cName"></div>
+          <div class="newClient"><label>Contact number</label><input id="cContact"></div>
+          <div class="newClient"><label>Birthdate</label><input id="cBirth" type="date"></div>
+          <div><label>Policy number</label><input id="cPolicyNo"></div>
+          <div><label>Start date</label><input id="cStart" type="date"></div>
+        </div>
+        <button class="btn" id="convertSave">Save policy</button>
+        <button class="btn alt" id="convertCancel">Cancel</button>
+        <span class="err" id="convertErr"></span>
+      </div>
+      <p class="note">Estimates only, not an official quote from the insurer.</p>
+    </section>
+
+    <section id="tab-clients" class="hide">
+      <div class="panel">
+        <h3 style="margin-top:0">Add client</h3>
+        <div class="form">
+          <div><label>Full name</label><input id="clName"></div>
+          <div><label>Contact number</label><input id="clContact"></div>
+          <div><label>Email</label><input id="clEmail"></div>
+          <div><label>Birthdate</label><input id="clBirth" type="date"></div>
+        </div>
+        <button class="btn" id="clSave">Add client</button> <span class="err" id="clErr"></span>
+      </div>
+      <div class="panel" style="overflow-x:auto"><table><thead><tr><th>Name</th><th>Contact</th><th>Policies</th><th></th></tr></thead><tbody id="clientRows"></tbody></table></div>
+    </section>
+
+    <section id="tab-policies" class="hide">
+      <div class="panel" style="overflow-x:auto"><table><thead><tr><th>Policy no.</th><th>Client</th><th>Product</th><th>Coverage</th><th>Premium</th><th>Start</th><th>Status</th></tr></thead><tbody id="policyRows"></tbody></table></div>
+    </section>
+
+    <section id="tab-products" class="hide">
+      <div class="panel">
+        <h3 id="formTitle" style="margin-top:0">Add product</h3>
+        <div class="form">
+          <div><label>Company</label><input id="fCompany"></div>
+          <div><label>Product name</label><input id="fName"></div>
+          <div><label>Type</label><input id="fType" placeholder="Term, Whole Life, VUL..."></div>
+          <div><label>Term / coverage period</label><input id="fTerm" placeholder="10 years, To age 65"></div>
+          <div><label>Min age</label><input id="fMin" type="number"></div>
+          <div><label>Max age</label><input id="fMax" type="number"></div>
+          <div><label>Min coverage (PHP)</label><input id="fMinCov" type="number"></div>
+          <div class="wide"><label>Rates: annual premium per 1,000 coverage, by age band</label><input id="fRates" placeholder="18-30:4.5, 31-40:6.2, 41-50:10.8"></div>
+        </div>
+        <button class="btn" id="saveBtn">Save product</button>
+        <button class="btn alt" id="cancelBtn">Clear form</button>
+        <span class="err" id="formMsg"></span>
+      </div>
+      <div class="panel" style="overflow-x:auto"><table><thead><tr><th>Product</th><th>Type</th><th>Ages</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+    </section>
+
+    <section id="tab-team" class="hide">
+      <div class="panel">
+        <h3 style="margin-top:0">Invite an advisor</h3>
+        <div class="form"><div><label>Advisor email</label><input id="invEmail" type="email"></div></div>
+        <button class="btn" id="invBtn">Send invite</button> <span class="err" id="invMsg"></span>
+        <p class="note">The advisor signs up with this email and joins your team automatically.</p>
+      </div>
+      <div class="panel"><table><thead><tr><th>Member</th><th>Role</th></tr></thead><tbody id="teamRows"></tbody></table></div>
+    </section>
+
+  </main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// paste your Firebase config here
+firebase.initializeApp({
+  apiKey: "AIzaSyDCJnBWQkjsyxGbKqKdpMYZf5uiDY0OPQw",
+  authDomain: "fa-policypilot.firebaseapp.com",
+  projectId: "fa-policypilot",
+  storageBucket: "fa-policypilot.firebasestorage.app",
+  messagingSenderId: "994650935996",
+  appId: "1:994650935996:web:da1e7df08872758f3236b9"
+});
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// starter products for every new org, replace with real ones
+const SAMPLE_PRODUCTS = [
+  {company:"Sample Life",name:"Term 10 Protect",type:"Term",term:"10 years",minAge:18,maxAge:60,minCov:500000,rates:[{from:18,to:30,rate:3.2},{from:31,to:40,rate:4.8},{from:41,to:50,rate:9.5},{from:51,to:60,rate:19}]},
+  {company:"Sample Life",name:"Term 20 Family",type:"Term",term:"20 years",minAge:18,maxAge:50,minCov:1000000,rates:[{from:18,to:30,rate:4.1},{from:31,to:40,rate:6.3},{from:41,to:50,rate:12.4}]},
+  {company:"Sample Assurance",name:"Whole Life Secure",type:"Whole Life",term:"To age 100",minAge:0,maxAge:65,minCov:300000,rates:[{from:0,to:17,rate:12},{from:18,to:30,rate:18},{from:31,to:45,rate:27},{from:46,to:65,rate:44}]},
+  {company:"Sample Assurance",name:"VUL Growth Plus",type:"VUL",term:"To age 100",minAge:18,maxAge:65,minCov:500000,rates:[{from:18,to:35,rate:22},{from:36,to:50,rate:31},{from:51,to:65,rate:48}]}
+];
+const SMOKER_LOAD = 1.5; // smoker surcharge
+
+let profile = null;     // {uid, orgId, role, name}
+let products = [], clients = [], policies = [];
+let editingProductId = null;
+let pickedQuote = null; // product + premium chosen for conversion
+let isSignUp = false;
+let busySigningUp = false;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const peso = n => "PHP " + Math.round(n).toLocaleString("en-PH");
+const orgRef = () => db.collection("orgs").doc(profile.orgId);
+const isAdmin = () => profile.role === "admin";
+
+// ---------- auth ----------
+function showAuth(){
+  $("app").classList.add("hide");
+  $("authScreen").classList.remove("hide");
+}
+function setAuthMode(signUp){
+  isSignUp = signUp;
+  $("authTitle").textContent = signUp ? "Create account" : "Sign in";
+  $("authBtn").textContent = signUp ? "Create account" : "Sign in";
+  $("authSwitch").textContent = signUp ? "I already have an account" : "Create an account";
+  $("nameRow").classList.toggle("hide", !signUp);
+  $("orgRow").classList.toggle("hide", !signUp);
+  $("authErr").textContent = "";
+}
+$("authSwitch").onclick = () => setAuthMode(!isSignUp);
+
+$("authBtn").onclick = async () => {
+  const email = $("aEmail").value.trim().toLowerCase();
+  const pass = $("aPass").value;
+  $("authErr").textContent = "";
+  try {
+    if (!isSignUp) { await auth.signInWithEmailAndPassword(email, pass); return; }
+    const name = $("aName").value.trim(), orgName = $("aOrg").value.trim();
+    if (!name) { $("authErr").textContent = "Enter your name."; return; }
+    busySigningUp = true;
+    const cred = await auth.createUserWithEmailAndPassword(email, pass);
+    const uid = cred.user.uid;
+    const invite = await db.collection("invites").doc(email).get();
+    const batch = db.batch();
+    let orgId, role;
+    if (invite.exists) {
+      orgId = invite.data().orgId; role = "advisor";
+      batch.delete(invite.ref);
+    } else {
+      if (!orgName) { $("authErr").textContent = "Enter your company or agency name."; await cred.user.delete(); busySigningUp = false; return; }
+      const newOrg = db.collection("orgs").doc();
+      orgId = newOrg.id; role = "admin";
+      batch.set(newOrg, {name: orgName, ownerUid: uid, createdAt: Date.now()});
+      SAMPLE_PRODUCTS.forEach(p => batch.set(newOrg.collection("products").doc(), p));
+    }
+    batch.set(db.collection("users").doc(uid), {orgId, role, name, email});
+    await batch.commit();
+    busySigningUp = false;
+    await startApp(cred.user);
+  } catch (e) {
+    busySigningUp = false;
+    $("authErr").textContent = e.message;
+  }
+};
+
+$("logoutBtn").onclick = () => auth.signOut();
+
+auth.onAuthStateChanged(async user => {
+  if (busySigningUp) return;
+  if (!user) { profile = null; showAuth(); return; }
+  await startApp(user);
+});
+
+async function startApp(user){
+  const snap = await db.collection("users").doc(user.uid).get();
+  if (!snap.exists) { $("authErr").textContent = "No profile found for this account."; auth.signOut(); return; }
+  profile = Object.assign({uid: user.uid}, snap.data());
+  const org = await orgRef().get();
+  $("orgTitle").textContent = org.exists ? "| " + org.data().name : "";
+  document.querySelectorAll(".adminOnly").forEach(el => el.classList.toggle("hide", !isAdmin()));
+  $("authScreen").classList.add("hide");
+  $("app").classList.remove("hide");
+  await loadAll();
+  showTab("quote");
+}
+
+// ---------- data ----------
+async function loadAll(){
+  const prodSnap = await orgRef().collection("products").get();
+  products = prodSnap.docs.map(d => Object.assign({id: d.id}, d.data()));
+  // advisors must filter by their own uid, admin reads everything
+  let clientQ = orgRef().collection("clients"), policyQ = orgRef().collection("policies");
+  if (!isAdmin()) { clientQ = clientQ.where("advisorUid","==",profile.uid); policyQ = policyQ.where("advisorUid","==",profile.uid); }
+  const [cSnap, pSnap] = await Promise.all([clientQ.get(), policyQ.get()]);
+  clients = cSnap.docs.map(d => Object.assign({id: d.id}, d.data())).sort((a,b) => a.name.localeCompare(b.name));
+  policies = pSnap.docs.map(d => Object.assign({id: d.id}, d.data())).sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+  renderAll();
+}
+function renderAll(){ renderTypes(); renderResults(); renderClients(); renderPolicies(); renderProductRows(); }
+
+// ---------- tabs ----------
+function showTab(name){
+  ["quote","clients","policies","products","team"].forEach(t => $("tab-" + t).classList.toggle("hide", t !== name));
+  document.querySelectorAll("nav button[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
+  if (name === "team") loadTeam();
+}
+document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+// ---------- quote ----------
+function rateFor(p, age){
+  const band = p.rates.find(r => age >= r.from && age <= r.to);
+  return band ? band.rate : null;
+}
+function renderTypes(){
+  const sel = $("typeFilter"), cur = sel.value;
+  const types = [...new Set(products.map(p => p.type))];
+  sel.innerHTML = '<option value="">All types</option>' + types.map(t => "<option>" + esc(t) + "</option>").join("");
+  sel.value = types.includes(cur) ? cur : "";
+}
+function renderResults(){
+  const age = parseInt($("age").value, 10);
+  const coverage = parseFloat($("coverage").value) || 0;
+  const mode = parseFloat($("mode").value);
+  const smoker = $("smoker").value === "yes";
+  const type = $("typeFilter").value;
+  const box = $("results");
+  if (isNaN(age)) { $("summary").textContent = ""; box.innerHTML = '<div class="empty">Enter the client age to see eligible policies.</div>'; return; }
+
+  const items = products.filter(p => age >= p.minAge && age <= p.maxAge && (!type || p.type === type)).map(p => {
+    const rate = rateFor(p, age);
+    return {p, annual: rate === null ? null : coverage / 1000 * rate * (smoker ? SMOKER_LOAD : 1)};
+  }).sort((a,b) => (a.annual === null) - (b.annual === null) || a.annual - b.annual);
+
+  $("summary").textContent = items.length + " of " + products.length + " products available for age " + age;
+  if (!items.length) { box.innerHTML = '<div class="empty">No product fits age ' + age + '. Try a different age or policy type.</div>'; return; }
+
+  box.innerHTML = items.map((it, i) => {
+    const p = it.p;
+    const price = it.annual === null ? '<span class="meta">No rate set</span>'
+      : "<b>" + peso(it.annual * mode) + '</b><div class="meta">' + $("mode").selectedOptions[0].text.toLowerCase() + "</div>";
+    const warn = coverage < p.minCov ? '<div class="err">Minimum coverage is ' + peso(p.minCov) + "</div>" : "";
+    const action = it.annual === null ? "" : '<div><button class="btn" data-pick="' + p.id + '">Convert to policy</button></div>';
+    return '<div class="result"><div><h3>' + esc(p.name) + '</h3><div class="meta">' + esc(p.company) +
+      '</div><div style="margin-top:6px"><span class="tag">' + esc(p.type) + '</span><span class="meta">' + esc(p.term) +
+      " &middot; issue age " + p.minAge + "-" + p.maxAge + "</span></div>" + warn + '</div><div class="price">' + price + action + "</div></div>";
+  }).join("");
+}
+["age","coverage","smoker","mode","typeFilter"].forEach(id => $(id).addEventListener("input", renderResults));
+
+// ---------- convert quote to policy ----------
+$("results").addEventListener("click", e => {
+  const id = e.target.dataset.pick;
+  if (!id) return;
+  const p = products.find(x => x.id === id);
+  const age = parseInt($("age").value, 10);
+  const coverage = parseFloat($("coverage").value) || 0;
+  const smoker = $("smoker").value === "yes";
+  const annual = coverage / 1000 * rateFor(p, age) * (smoker ? SMOKER_LOAD : 1);
+  pickedQuote = {p, coverage, smoker, mode: $("mode").selectedOptions[0].text, modeFactor: parseFloat($("mode").value), annual};
+  $("convertTitle").textContent = "Convert: " + p.name + " (" + peso(annual * pickedQuote.modeFactor) + " " + pickedQuote.mode.toLowerCase() + ")";
+  $("cClient").innerHTML = '<option value="">New client</option>' + clients.map(c => '<option value="' + c.id + '">' + esc(c.name) + "</option>").join("");
+  $("cStart").value = new Date().toISOString().slice(0,10);
+  ["cName","cContact","cBirth","cPolicyNo"].forEach(i => $(i).value = "");
+  $("convertErr").textContent = "";
+  toggleNewClient();
+  $("convertBox").classList.remove("hide");
+  $("convertBox").scrollIntoView({behavior: "smooth"});
+});
+function toggleNewClient(){
+  document.querySelectorAll(".newClient").forEach(el => el.classList.toggle("hide", $("cClient").value !== ""));
+}
+$("cClient").onchange = toggleNewClient;
+$("convertCancel").onclick = () => $("convertBox").classList.add("hide");
+
+$("convertSave").onclick = async () => {
+  const q = pickedQuote;
+  let clientId = $("cClient").value;
+  if (!$("cPolicyNo").value.trim() || !$("cStart").value) { $("convertErr").textContent = "Policy number and start date are required."; return; }
+  if (!clientId && !$("cName").value.trim()) { $("convertErr").textContent = "Enter the client name."; return; }
+  try {
+    if (!clientId) {
+      const ref = await orgRef().collection("clients").add({
+        name: $("cName").value.trim(), contact: $("cContact").value.trim(), birthdate: $("cBirth").value,
+        advisorUid: profile.uid, createdAt: Date.now()
+      });
+      clientId = ref.id;
+    }
+    await orgRef().collection("policies").add({
+      clientId, advisorUid: profile.uid, productId: q.p.id, productName: q.p.name, company: q.p.company,
+      policyNo: $("cPolicyNo").value.trim(), coverage: q.coverage, smoker: q.smoker,
+      mode: q.mode, premium: Math.round(q.annual * q.modeFactor), startDate: $("cStart").value,
+      status: "active", createdAt: Date.now()
+    });
+    $("convertBox").classList.add("hide");
+    await loadAll();
+    showTab("policies");
+  } catch (e) { $("convertErr").textContent = e.message; }
+};
+
+// ---------- clients ----------
+function renderClients(){
+  $("clientRows").innerHTML = clients.map(c => {
+    const count = policies.filter(p => p.clientId === c.id).length;
+    return "<tr><td><b>" + esc(c.name) + '</b><br><span class="meta">' + esc(c.email || "") + "</span></td><td>" + esc(c.contact) +
+      "</td><td>" + count + '</td><td><button class="link" data-delclient="' + c.id + '">Delete</button></td></tr>';
+  }).join("") || '<tr><td colspan="4" class="empty">No clients yet.</td></tr>';
+}
+$("clSave").onclick = async () => {
+  const name = $("clName").value.trim();
+  if (!name) { $("clErr").textContent = "Enter the client name."; return; }
+  try {
+    await orgRef().collection("clients").add({
+      name, contact: $("clContact").value.trim(), email: $("clEmail").value.trim(), birthdate: $("clBirth").value,
+      advisorUid: profile.uid, createdAt: Date.now()
+    });
+    ["clName","clContact","clEmail","clBirth"].forEach(i => $(i).value = "");
+    $("clErr").textContent = "";
+    await loadAll();
+  } catch (e) { $("clErr").textContent = e.message; }
+};
+$("clientRows").addEventListener("click", async e => {
+  const id = e.target.dataset.delclient;
+  if (!id) return;
+  if (policies.some(p => p.clientId === id)) { alert("This client still has policies. Cancel or remove them first."); return; }
+  if (confirm("Delete this client?")) { await orgRef().collection("clients").doc(id).delete(); await loadAll(); }
+});
+
+// ---------- policies ----------
+function renderPolicies(){
+  const nameOf = id => (clients.find(c => c.id === id) || {}).name || "Unknown";
+  $("policyRows").innerHTML = policies.map(p =>
+    "<tr><td>" + esc(p.policyNo) + "</td><td>" + esc(nameOf(p.clientId)) + "</td><td>" + esc(p.productName) +
+    "</td><td>" + peso(p.coverage) + "</td><td>" + peso(p.premium) + '<div class="meta">' + esc(p.mode.toLowerCase()) + "</div></td><td>" + esc(p.startDate) +
+    '</td><td><select data-status="' + p.id + '">' + ["active","lapsed","cancelled"].map(s => "<option" + (s === p.status ? " selected" : "") + ">" + s + "</option>").join("") + "</select></td></tr>"
+  ).join("") || '<tr><td colspan="7" class="empty">No policies yet. Convert a quote to create one.</td></tr>';
+}
+$("policyRows").addEventListener("change", async e => {
+  const id = e.target.dataset.status;
+  if (!id) return;
+  await orgRef().collection("policies").doc(id).update({status: e.target.value});
+  await loadAll();
+});
+
+// ---------- products (admin) ----------
+const ratesToText = r => r.map(x => x.from + "-" + x.to + ":" + x.rate).join(", ");
+function textToRates(t){
+  const out = [];
+  t.split(",").forEach(part => {
+    const m = part.trim().match(/^(\d+)\s*-\s*(\d+)\s*:\s*([\d.]+)$/);
+    if (m) out.push({from: +m[1], to: +m[2], rate: +m[3]});
+  });
+  return out;
+}
+function renderProductRows(){
+  $("rows").innerHTML = products.map(p =>
+    "<tr><td><b>" + esc(p.name) + '</b><br><span class="meta">' + esc(p.company) + "</span></td><td>" + esc(p.type) +
+    "</td><td>" + p.minAge + "-" + p.maxAge + '</td><td><button class="link" data-edit="' + p.id + '">Edit</button><button class="link" data-del="' + p.id + '">Delete</button></td></tr>'
+  ).join("") || '<tr><td colspan="4" class="empty">No products yet. Add one above.</td></tr>';
+}
+function clearProductForm(){
+  editingProductId = null;
+  ["fCompany","fName","fType","fTerm","fMin","fMax","fMinCov","fRates"].forEach(i => $(i).value = "");
+  $("formTitle").textContent = "Add product";
+  $("formMsg").textContent = "";
+}
+$("cancelBtn").onclick = clearProductForm;
+$("saveBtn").onclick = async () => {
+  const p = {
+    company: $("fCompany").value.trim(), name: $("fName").value.trim(), type: $("fType").value.trim(), term: $("fTerm").value.trim(),
+    minAge: parseInt($("fMin").value, 10), maxAge: parseInt($("fMax").value, 10),
+    minCov: parseFloat($("fMinCov").value) || 0, rates: textToRates($("fRates").value)
+  };
+  if (!p.name || !p.type || isNaN(p.minAge) || isNaN(p.maxAge)) { $("formMsg").textContent = "Name, type, min age and max age are required."; return; }
+  if (p.minAge > p.maxAge) { $("formMsg").textContent = "Min age cannot be higher than max age."; return; }
+  if (!p.rates.length) { $("formMsg").textContent = "Add at least one rate, like 18-30:4.5"; return; }
+  try {
+    const col = orgRef().collection("products");
+    if (editingProductId) await col.doc(editingProductId).set(p); else await col.add(p);
+    clearProductForm();
+    await loadAll();
+  } catch (e) { $("formMsg").textContent = e.message; }
+};
+$("rows").addEventListener("click", async e => {
+  const editId = e.target.dataset.edit, delId = e.target.dataset.del;
+  if (editId) {
+    const p = products.find(x => x.id === editId);
+    editingProductId = p.id;
+    $("fCompany").value = p.company; $("fName").value = p.name; $("fType").value = p.type; $("fTerm").value = p.term;
+    $("fMin").value = p.minAge; $("fMax").value = p.maxAge; $("fMinCov").value = p.minCov; $("fRates").value = ratesToText(p.rates);
+    $("formTitle").textContent = "Edit product";
+    window.scrollTo(0, 0);
+  }
+  if (delId && confirm("Delete this product? Existing policies keep their saved product name.")) {
+    await orgRef().collection("products").doc(delId).delete();
+    await loadAll();
+  }
+});
+
+// ---------- team (admin) ----------
+async function loadTeam(){
+  const [users, invites] = await Promise.all([
+    db.collection("users").where("orgId","==",profile.orgId).get(),
+    db.collection("invites").where("orgId","==",profile.orgId).get()
+  ]);
+  $("teamRows").innerHTML = users.docs.map(d => "<tr><td>" + esc(d.data().name) + '<br><span class="meta">' + esc(d.data().email) + "</span></td><td>" + esc(d.data().role) + "</td></tr>").join("") +
+    invites.docs.map(d => "<tr><td>" + esc(d.id) + '</td><td class="meta">invited</td></tr>').join("");
+}
+$("invBtn").onclick = async () => {
+  const email = $("invEmail").value.trim().toLowerCase();
+  if (!email) { $("invMsg").textContent = "Enter an email."; return; }
+  try {
+    await db.collection("invites").doc(email).set({orgId: profile.orgId, role: "advisor", createdAt: Date.now()});
+    $("invEmail").value = ""; $("invMsg").textContent = "";
+    loadTeam();
+  } catch (e) { $("invMsg").textContent = e.message; }
+};
+</script>
+</body>
+</html>

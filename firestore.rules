@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    // profile of the signed-in user (getAfter so batched signup writes work)
+    function me() {
+      return getAfter(/databases/$(db)/documents/users/$(request.auth.uid)).data;
+    }
+    function inOrg(orgId) {
+      return request.auth != null
+        && exists(/databases/$(db)/documents/users/$(request.auth.uid))
+        && me().orgId == orgId;
+    }
+    function isAdmin(orgId) {
+      return inOrg(orgId) && me().role == 'admin';
+    }
+
+    match /users/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid
+        || (inOrg(resource.data.orgId) && me().role == 'admin'));
+      // new org owner, or advisor with a matching invite
+      allow create: if request.auth.uid == uid && (
+        (request.resource.data.role == 'admin'
+          && getAfter(/databases/$(db)/documents/orgs/$(request.resource.data.orgId)).data.ownerUid == uid)
+        || (request.resource.data.role == 'advisor'
+          && exists(/databases/$(db)/documents/invites/$(request.auth.token.email.lower()))
+          && get(/databases/$(db)/documents/invites/$(request.auth.token.email.lower())).data.orgId == request.resource.data.orgId));
+    }
+
+    match /invites/{email} {
+      allow read, delete: if request.auth != null
+        && (request.auth.token.email.lower() == email || isAdmin(resource.data.orgId));
+      allow create: if isAdmin(request.resource.data.orgId)
+        && request.resource.data.role == 'advisor';
+    }
+
+    match /orgs/{orgId} {
+      allow read: if inOrg(orgId);
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isAdmin(orgId);
+
+      match /products/{id} {
+        allow read: if inOrg(orgId);
+        allow write: if isAdmin(orgId);
+      }
+
+      // clients and policies: advisor sees own records, admin sees all
+      match /clients/{id} {
+        allow read, update, delete: if inOrg(orgId)
+          && (me().role == 'admin' || resource.data.advisorUid == request.auth.uid);
+        allow create: if inOrg(orgId) && request.resource.data.advisorUid == request.auth.uid;
+      }
+      match /policies/{id} {
+        allow read, update, delete: if inOrg(orgId)
+          && (me().role == 'admin' || resource.data.advisorUid == request.auth.uid);
+        allow create: if inOrg(orgId) && request.resource.data.advisorUid == request.auth.uid;
+      }
+    }
+  }
+}
