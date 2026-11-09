@@ -36,6 +36,24 @@ button.link{background:none;border:0;color:var(--teal);cursor:pointer;font:inher
 .err{color:var(--red);font-size:13px}
 .hide{display:none}
 #authBox{max-width:380px;margin:60px auto}
+.dpPop{position:absolute;z-index:50;width:268px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(16,35,31,.18);padding:10px}
+.dpPop.hide{display:none}
+.dpHead{display:flex;gap:6px;margin-bottom:8px}
+.dpHead select{flex:1;padding:5px}
+.dpHead input{width:72px;padding:5px}
+.dpHead button{width:30px;border:1px solid var(--line);background:#fff;border-radius:6px;cursor:pointer;font-size:16px}
+.dpGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.dpGrid .dow{font-size:11px;color:var(--mute);padding:4px 0}
+.dpDay{border:0;background:none;padding:7px 0;border-radius:6px;cursor:pointer;font:inherit;font-size:13px}
+.dpDay:hover{background:#e3efec}
+.dpDay.today{border:1px solid var(--amber)}
+.dpDay.sel{background:var(--teal);color:#fff}
+.dpFoot{display:flex;justify-content:space-between;margin-top:8px}
+input.dp{cursor:pointer}
+.dlgBack{position:fixed;inset:0;background:rgba(16,35,31,.45);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+.dlg{background:#fff;border-radius:12px;padding:22px;max-width:380px;width:100%;box-shadow:0 12px 32px rgba(0,0,0,.25)}
+.dlg p{margin:0 0 18px}
+.dlgBtns{display:flex;justify-content:flex-end;gap:8px}
 @media(max-width:640px){.finder{grid-template-columns:1fr}.result{grid-template-columns:1fr}.price{text-align:left}}
 </style>
 </head>
@@ -90,9 +108,9 @@ button.link{background:none;border:0;color:var(--teal);cursor:pointer;font:inher
           <div><label>Client</label><select id="cClient"></select></div>
           <div class="newClient"><label>New client name</label><input id="cName"></div>
           <div class="newClient"><label>Contact number</label><input id="cContact"></div>
-          <div class="newClient"><label>Birthdate</label><input id="cBirth" type="date"></div>
+          <div class="newClient"><label>Birthdate</label><input id="cBirth" type="text" class="dp"></div>
           <div><label>Policy number</label><input id="cPolicyNo"></div>
-          <div><label>Start date</label><input id="cStart" type="date"></div>
+          <div><label>Start date</label><input id="cStart" type="text" class="dp"></div>
         </div>
         <button class="btn" id="convertSave">Save policy</button>
         <button class="btn alt" id="convertCancel">Cancel</button>
@@ -108,7 +126,7 @@ button.link{background:none;border:0;color:var(--teal);cursor:pointer;font:inher
           <div><label>Full name</label><input id="clName"></div>
           <div><label>Contact number</label><input id="clContact"></div>
           <div><label>Email</label><input id="clEmail"></div>
-          <div><label>Birthdate</label><input id="clBirth" type="date"></div>
+          <div><label>Birthdate</label><input id="clBirth" type="text" class="dp"></div>
         </div>
         <button class="btn" id="clSave">Add client</button> <span class="err" id="clErr"></span>
       </div>
@@ -190,6 +208,119 @@ const peso = n => "PHP " + Math.round(n).toLocaleString("en-PH");
 const orgRef = () => db.collection("orgs").doc(profile.orgId);
 const isAdmin = () => profile.role === "admin";
 
+// ---------- custom dialogs ----------
+function openDialog(text, withCancel, confirmLabel){
+  return new Promise(resolve => {
+    const back = document.createElement("div");
+    back.className = "dlgBack";
+    back.innerHTML = '<div class="dlg" role="dialog" aria-modal="true"><p>' + esc(text) + '</p><div class="dlgBtns">' +
+      (withCancel ? '<button class="btn alt" data-ok="0">Cancel</button>' : "") +
+      '<button class="btn" data-ok="1">' + esc(confirmLabel) + "</button></div></div>";
+    const finish = result => { document.removeEventListener("keydown", onKey); back.remove(); resolve(result); };
+    const onKey = e => { if (e.key === "Escape") finish(false); };
+    back.addEventListener("click", e => {
+      if (e.target.dataset.ok) finish(e.target.dataset.ok === "1");
+      else if (e.target === back && withCancel) finish(false);
+    });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(back);
+    back.querySelector('[data-ok="1"]').focus();
+  });
+}
+const showMessage = text => openDialog(text, false, "OK");
+const askConfirm = (text, label) => openDialog(text, true, label || "Confirm");
+
+// ---------- custom date picker ----------
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+const nativeValueSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+const pad2 = n => String(n).padStart(2, "0");
+const dpPop = document.createElement("div");
+dpPop.className = "dpPop hide";
+document.body.appendChild(dpPop);
+let dpInput = null, dpYear = 0, dpMonth = 0;
+
+function todayIso(){
+  const t = new Date(); // local date, not UTC
+  return t.getFullYear() + "-" + pad2(t.getMonth() + 1) + "-" + pad2(t.getDate());
+}
+function formatDisplay(iso){
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  return MONTH_NAMES[m - 1].slice(0, 3) + " " + d + ", " + y;
+}
+// input.value holds the ISO date (yyyy-mm-dd), the text shown is formatted
+function makeDatePicker(input){
+  let iso = "";
+  Object.defineProperty(input, "value", {
+    get: () => iso,
+    set: v => { iso = v || ""; nativeValueSet.call(input, formatDisplay(iso)); }
+  });
+  input.readOnly = true;
+  input.placeholder = "Select date";
+  input.addEventListener("click", () => openDatePicker(input));
+  input.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === "ArrowDown") { e.preventDefault(); openDatePicker(input); } });
+}
+function openDatePicker(input){
+  dpInput = input;
+  const [y, m] = (input.value || todayIso()).split("-").map(Number);
+  dpYear = y; dpMonth = m - 1;
+  renderDatePicker();
+  const box = input.getBoundingClientRect();
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - 280;
+  dpPop.style.top = (window.scrollY + box.bottom + 4) + "px";
+  dpPop.style.left = Math.max(4, Math.min(window.scrollX + box.left, maxLeft)) + "px";
+  dpPop.classList.remove("hide");
+}
+function closeDatePicker(){ dpPop.classList.add("hide"); dpInput = null; }
+function renderDatePicker(){
+  const startDay = new Date(dpYear, dpMonth, 1).getDay();
+  const dayCount = new Date(dpYear, dpMonth + 1, 0).getDate();
+  const chosen = dpInput.value, today = todayIso();
+  let cells = DAY_NAMES.map(n => '<span class="dow">' + n + "</span>").join("");
+  for (let i = 0; i < startDay; i++) cells += "<span></span>";
+  for (let d = 1; d <= dayCount; d++) {
+    const iso = String(dpYear).padStart(4, "0") + "-" + pad2(dpMonth + 1) + "-" + pad2(d);
+    cells += '<button type="button" class="dpDay' + (iso === chosen ? " sel" : "") + (iso === today ? " today" : "") + '" data-iso="' + iso + '">' + d + "</button>";
+  }
+  dpPop.innerHTML = '<div class="dpHead"><button type="button" data-nav="-1">&lsaquo;</button>' +
+    '<select data-field="month">' + MONTH_NAMES.map((n, i) => '<option value="' + i + '"' + (i === dpMonth ? " selected" : "") + ">" + n + "</option>").join("") + "</select>" +
+    '<input type="number" data-field="year" min="1900" max="2100" value="' + dpYear + '">' +
+    '<button type="button" data-nav="1">&rsaquo;</button></div><div class="dpGrid">' + cells +
+    '</div><div class="dpFoot"><button type="button" class="link" data-act="today">Today</button><button type="button" class="link" data-act="clear">Clear</button></div>';
+}
+function pickDate(iso){
+  dpInput.value = iso;
+  dpInput.dispatchEvent(new Event("change"));
+  closeDatePicker();
+}
+dpPop.addEventListener("click", e => {
+  const t = e.target;
+  if (t.dataset.iso) pickDate(t.dataset.iso);
+  else if (t.dataset.act === "today") pickDate(todayIso());
+  else if (t.dataset.act === "clear") pickDate("");
+  else if (t.dataset.nav) {
+    dpMonth += parseInt(t.dataset.nav, 10);
+    if (dpMonth < 0) { dpMonth = 11; dpYear--; }
+    if (dpMonth > 11) { dpMonth = 0; dpYear++; }
+    renderDatePicker();
+  }
+});
+dpPop.addEventListener("change", e => {
+  if (e.target.dataset.field === "month") dpMonth = parseInt(e.target.value, 10);
+  if (e.target.dataset.field === "year") {
+    const y = parseInt(e.target.value, 10);
+    if (y >= 1900 && y <= 2100) dpYear = y;
+  }
+  renderDatePicker();
+});
+// mousedown, because a click re-renders the popup and the target is gone by then
+document.addEventListener("mousedown", e => {
+  if (dpInput && !dpPop.contains(e.target) && e.target !== dpInput) closeDatePicker();
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && dpInput) closeDatePicker(); });
+document.querySelectorAll("input.dp").forEach(makeDatePicker);
+
 // ---------- auth ----------
 function showAuth(){
   $("app").classList.add("hide");
@@ -215,7 +346,17 @@ $("authBtn").onclick = async () => {
     const name = $("aName").value.trim(), orgName = $("aOrg").value.trim();
     if (!name) { $("authErr").textContent = "Enter your name."; return; }
     busySigningUp = true;
-    const cred = await auth.createUserWithEmailAndPassword(email, pass);
+    let cred, isNewAuthUser = true;
+    try {
+      cred = await auth.createUserWithEmailAndPassword(email, pass);
+    } catch (e) {
+      if (e.code !== "auth/email-already-in-use") throw e;
+      // earlier signup may have stopped halfway, so sign in and finish it
+      cred = await auth.signInWithEmailAndPassword(email, pass);
+      isNewAuthUser = false;
+      const existing = await db.collection("users").doc(cred.user.uid).get();
+      if (existing.exists) { busySigningUp = false; await startApp(cred.user); return; }
+    }
     const uid = cred.user.uid;
     const invite = await db.collection("invites").doc(email).get();
     const batch = db.batch();
@@ -224,14 +365,25 @@ $("authBtn").onclick = async () => {
       orgId = invite.data().orgId; role = "advisor";
       batch.delete(invite.ref);
     } else {
-      if (!orgName) { $("authErr").textContent = "Enter your company or agency name."; await cred.user.delete(); busySigningUp = false; return; }
+      if (!orgName) {
+        $("authErr").textContent = "Enter your company or agency name.";
+        if (isNewAuthUser) await cred.user.delete();
+        busySigningUp = false;
+        return;
+      }
       const newOrg = db.collection("orgs").doc();
       orgId = newOrg.id; role = "admin";
       batch.set(newOrg, {name: orgName, ownerUid: uid, createdAt: Date.now()});
       SAMPLE_PRODUCTS.forEach(p => batch.set(newOrg.collection("products").doc(), p));
     }
     batch.set(db.collection("users").doc(uid), {orgId, role, name, email});
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (e) {
+      // don't leave an auth account without a profile
+      if (isNewAuthUser) await cred.user.delete();
+      throw e;
+    }
     busySigningUp = false;
     await startApp(cred.user);
   } catch (e) {
@@ -336,7 +488,7 @@ $("results").addEventListener("click", e => {
   pickedQuote = {p, coverage, smoker, mode: $("mode").selectedOptions[0].text, modeFactor: parseFloat($("mode").value), annual};
   $("convertTitle").textContent = "Convert: " + p.name + " (" + peso(annual * pickedQuote.modeFactor) + " " + pickedQuote.mode.toLowerCase() + ")";
   $("cClient").innerHTML = '<option value="">New client</option>' + clients.map(c => '<option value="' + c.id + '">' + esc(c.name) + "</option>").join("");
-  $("cStart").value = new Date().toISOString().slice(0,10);
+  $("cStart").value = todayIso();
   ["cName","cContact","cBirth","cPolicyNo"].forEach(i => $(i).value = "");
   $("convertErr").textContent = "";
   toggleNewClient();
@@ -398,8 +550,8 @@ $("clSave").onclick = async () => {
 $("clientRows").addEventListener("click", async e => {
   const id = e.target.dataset.delclient;
   if (!id) return;
-  if (policies.some(p => p.clientId === id)) { alert("This client still has policies. Cancel or remove them first."); return; }
-  if (confirm("Delete this client?")) { await orgRef().collection("clients").doc(id).delete(); await loadAll(); }
+  if (policies.some(p => p.clientId === id)) { await showMessage("This client still has policies. Cancel or remove them first."); return; }
+  if (await askConfirm("Delete this client?", "Delete")) { await orgRef().collection("clients").doc(id).delete(); await loadAll(); }
 });
 
 // ---------- policies ----------
@@ -467,7 +619,7 @@ $("rows").addEventListener("click", async e => {
     $("formTitle").textContent = "Edit product";
     window.scrollTo(0, 0);
   }
-  if (delId && confirm("Delete this product? Existing policies keep their saved product name.")) {
+  if (delId && await askConfirm("Delete this product? Existing policies keep their saved product name.", "Delete")) {
     await orgRef().collection("products").doc(delId).delete();
     await loadAll();
   }
