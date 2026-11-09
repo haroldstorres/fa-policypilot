@@ -85,6 +85,19 @@ textarea{width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;f
 .sCard li{margin-bottom:6px}
 .sIdle{background:#fff;border-radius:14px;padding:24px;text-align:center;font-size:clamp(20px,4.6vw,32px)}
 .sFoot{display:inline-block;background:#fff;border-radius:8px;padding:4px 10px;margin-top:6px;font-size:clamp(11px,2.4vw,14px);color:var(--mute)}
+.sDaily{font-weight:400;color:var(--mute)}
+.sNote{display:table;background:#fff;border-radius:8px;padding:4px 12px;margin-top:6px;font-weight:600;font-size:clamp(13px,3vw,20px)}
+.stream.compact{padding:14px}
+.stream.compact .sCards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stream.compact .sCards .sIdle{grid-column:1/-1}
+.stream.compact .sCard{margin:0;padding:8px 12px;border-radius:10px}
+.stream.compact .sHead{margin-bottom:8px}
+.stream.compact .sName{font-size:clamp(15px,3.4vw,22px)}
+.stream.compact .sMeta{font-size:clamp(11px,2.2vw,14px)}
+.stream.compact .sPrice{font-size:clamp(13px,2.8vw,18px)}
+.stream.compact .sCard ul{font-size:clamp(13px,2.8vw,18px);column-count:2;column-gap:20px}
+.stream.compact .sCard li{margin-bottom:3px}
+.stream.compact .sIdle{padding:14px;font-size:clamp(16px,3.6vw,24px)}
 @media(max-width:640px){.finder{grid-template-columns:1fr}.result{grid-template-columns:1fr}.price{text-align:left}}
 </style>
 </head>
@@ -199,6 +212,9 @@ textarea{width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;f
           <div><label>Payment mode</label><select id="liveMode"><option value="0.0917">Monthly</option><option value="0.27">Quarterly</option><option value="0.52">Semi-annual</option><option value="1">Annual</option></select></div>
           <div><label>Background</label><select id="liveBg"><option value="green">Green screen</option><option value="dark">Dark (for testing)</option></select></div>
           <div><label>&nbsp;</label><label class="chip"><input type="checkbox" id="liveShowPrices" checked> Show estimated prices</label></div>
+          <div><label>Layout</label><select id="liveLayout"><option value="compact">Compact (top of screen)</option><option value="full">Full screen</option></select></div>
+          <div><label>&nbsp;</label><label class="chip"><input type="checkbox" id="liveShowDaily" checked> Show price per day</label></div>
+          <div class="wide"><label>Footer message (your live schedule or how to reach you)</label><input id="liveFooter" placeholder="Live every 12 noon. Message us for a quote."></div>
         </div>
         <button class="btn" id="liveShowList">Show list on screen</button>
         <button class="btn alt" id="liveClear">Clear screen</button>
@@ -943,6 +959,9 @@ function liveSettings(){
     modeFactor: parseFloat($("liveMode").value),
     modeLabel: $("liveMode").selectedOptions[0].text.toLowerCase(),
     showPrices: $("liveShowPrices").checked,
+    showDaily: $("liveShowDaily").checked,
+    layout: $("liveLayout").value,
+    footer: $("liveFooter").value.trim(),
     bg: $("liveBg").value,
     section: document.querySelector('input[name="liveSection"]:checked').value
   };
@@ -950,19 +969,21 @@ function liveSettings(){
 function eligibleProducts(age, settings){
   return products.filter(p => age >= p.minAge && age <= p.maxAge).map(p => {
     const rate = rateFor(p, age);
-    return {p, price: rate === null ? null : settings.coverage / 1000 * rate * settings.modeFactor};
+    return {p, price: rate === null ? null : settings.coverage / 1000 * rate * settings.modeFactor,
+      daily: rate === null ? null : settings.coverage / 1000 * rate / 365};
   }).sort((a, b) => (a.price === null) - (b.price === null) || a.price - b.price);
 }
 
 function buildLivePayload(){
   const set = liveSettings();
-  const payload = {mode: liveState.mode, bg: set.bg};
+  const payload = {mode: liveState.mode, bg: set.bg, layout: set.layout, footer: set.footer};
   if (liveState.mode === "list") {
     payload.age = liveState.age;
     payload.name = liveState.name;
     payload.items = eligibleProducts(liveState.age, set).map(it => ({
       name: it.p.name, company: it.p.company, type: it.p.type, term: it.p.term,
-      price: set.showPrices && it.price !== null ? "from " + peso(it.price) + " " + set.modeLabel : ""
+      price: set.showPrices && it.price !== null ? "from " + peso(it.price) + " " + set.modeLabel : "",
+      daily: set.showPrices && set.showDaily && it.daily !== null ? "about " + peso(it.daily) + " a day" : ""
     }));
   }
   if (liveState.mode === "detail") {
@@ -983,8 +1004,8 @@ function streamHtml(d){
   let body = "";
   if (d.mode === "list") {
     body = '<div class="sHead">' + (d.name ? esc(d.name) + " - " : "") + "Age " + d.age + "</div>";
-    body += d.items.map(it => '<div class="sCard"><div class="sName">' + esc(it.name) + '</div><div class="sMeta">' + esc(it.company) + " - " + esc(it.type) + " - " + esc(it.term) + "</div>" +
-      (it.price ? '<div class="sPrice">' + esc(it.price) + "</div>" : "") + "</div>").join("") || '<div class="sIdle">No policy available for this age.</div>';
+    body += '<div class="sCards">' + (d.items.map(it => '<div class="sCard"><div class="sName">' + esc(it.name) + '</div><div class="sMeta">' + esc(it.company) + " - " + esc(it.type) + " - " + esc(it.term) + "</div>" +
+      (it.price ? '<div class="sPrice">' + esc(it.price) + (it.daily ? ' <span class="sDaily">(' + esc(it.daily) + ")</span>" : "") + "</div>" : "") + "</div>").join("") || '<div class="sIdle">No policy available for this age.</div>') + "</div>";
   } else if (d.mode === "detail") {
     body = '<div class="sCard"><div class="sName">' + esc(d.product.name) + '</div><div class="sMeta">' + esc(d.product.company) + " - " + esc(d.product.type) + " - " + esc(d.product.term) + "</div>" +
       (d.product.summary ? '<div class="sMeta" style="margin-top:6px">' + esc(d.product.summary) + "</div>" : "") +
@@ -993,7 +1014,8 @@ function streamHtml(d){
   } else {
     body = '<div class="sIdle"><b>Comment your age</b><br>to see which policies you can get</div>';
   }
-  return '<div class="stream" style="background:' + bg + '">' + body + '<div class="sFoot">Estimates only. Not an official quote. See the official policy documents.</div></div>';
+  return '<div class="stream' + (d.layout === "full" ? "" : " compact") + '" style="background:' + bg + '">' + body +
+    (d.footer ? '<div class="sNote">' + esc(d.footer) + "</div>" : "") + '<div class="sFoot">Estimates only. Not an official quote. See the official policy documents.</div></div>';
 }
 
 function pushLive(){
@@ -1037,7 +1059,9 @@ $("liveProducts").addEventListener("click", e => {
 });
 $("liveAge").addEventListener("input", renderLiveHost);
 $("liveAge").addEventListener("keydown", e => { if (e.key === "Enter") $("liveShowList").click(); });
-["liveCoverage","liveMode","liveShowPrices","liveBg"].forEach(id => $(id).addEventListener("input", () => { renderLiveHost(); pushLive(); }));
+try { $("liveFooter").value = localStorage.getItem("pp_liveFooter") || ""; } catch (e) {}
+$("liveFooter").addEventListener("input", () => { try { localStorage.setItem("pp_liveFooter", $("liveFooter").value); } catch (e) {} });
+["liveCoverage","liveMode","liveShowPrices","liveShowDaily","liveLayout","liveFooter","liveBg"].forEach(id => $(id).addEventListener("input", () => { renderLiveHost(); pushLive(); }));
 document.querySelectorAll('input[name="liveSection"]').forEach(r => r.addEventListener("change", pushLive));
 
 liveChannel.onmessage = e => {
