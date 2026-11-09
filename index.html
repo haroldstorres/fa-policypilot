@@ -40,6 +40,10 @@ button.link{background:none;border:0;color:var(--teal);cursor:pointer;font:inher
 .badge.st-lapsed{background:var(--red);color:#fff}
 .badge.st-cancelled{background:#e4e7e6;color:var(--mute)}
 .schedRow{display:grid;grid-template-columns:110px 1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.tileVal{font:700 24px Georgia,serif;margin:2px 0}
+.tile.warn .tileVal{color:var(--red)}
 .hide{display:none}
 #authBox{max-width:380px;margin:60px auto}
 .dpPop{position:absolute;z-index:50;width:268px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(16,35,31,.18);padding:10px}
@@ -112,6 +116,7 @@ textarea{width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;f
       <button data-tab="quote" class="on">Quote</button>
       <button data-tab="clients">Clients</button>
       <button data-tab="policies">Policies</button>
+      <button data-tab="dashboard">Dashboard</button>
       <button data-tab="live">Live</button>
       <button data-tab="products" class="adminOnly">Products</button>
       <button data-tab="team" class="adminOnly">Team</button>
@@ -165,6 +170,23 @@ textarea{width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;f
 
     <section id="tab-policies" class="hide">
       <div class="panel" style="overflow-x:auto"><table><thead><tr><th>Policy no.</th><th>Client</th><th>Product</th><th>Coverage</th><th>Premium</th><th>Start</th><th>Status</th><th>Payment</th></tr></thead><tbody id="policyRows"></tbody></table></div>
+    </section>
+
+    <section id="tab-dashboard" class="hide">
+      <div class="tiles" id="dashTiles"></div>
+      <div class="panel" style="overflow-x:auto">
+        <h3 style="margin-top:0">Overdue</h3>
+        <table><thead><tr><th>Client</th><th>Policy no.</th><th>Product</th><th>Oldest unpaid</th><th>Late</th><th>Amount</th><th></th></tr></thead><tbody id="dashOverdue"></tbody></table>
+      </div>
+      <div class="panel" style="overflow-x:auto">
+        <h3 style="margin-top:0">Due in the next 30 days</h3>
+        <table><thead><tr><th>Due date</th><th>When</th><th>Client</th><th>Policy no.</th><th>Product</th><th>Amount</th><th></th></tr></thead><tbody id="dashUpcoming"></tbody></table>
+      </div>
+      <div class="panel" style="overflow-x:auto">
+        <h3 style="margin-top:0">Production per advisor</h3>
+        <table><thead><tr><th>Advisor</th><th>Active policies</th><th>Annualized premium</th><th>Collected this month</th></tr></thead><tbody id="dashAdvisors"></tbody></table>
+        <p class="note">Annualized premium counts active policies only, converted to a full year.</p>
+      </div>
     </section>
 
     <section id="tab-live" class="hide">
@@ -499,14 +521,15 @@ async function loadAll(){
   policies = pSnap.docs.map(d => Object.assign({id: d.id}, d.data())).sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
   renderAll();
 }
-function renderAll(){ renderTypes(); renderResults(); renderClients(); renderPolicies(); renderProductRows(); renderLiveHost(); }
+function renderAll(){ renderTypes(); renderResults(); renderClients(); renderPolicies(); renderProductRows(); renderLiveHost(); renderDashboard(); }
 
 // ---------- tabs ----------
 function showTab(name){
-  ["quote","clients","policies","live","products","team"].forEach(t => $("tab-" + t).classList.toggle("hide", t !== name));
+  ["quote","clients","policies","dashboard","live","products","team"].forEach(t => $("tab-" + t).classList.toggle("hide", t !== name));
   document.querySelectorAll("nav button[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
   if (name === "team") loadTeam();
   if (name === "live") renderLiveHost();
+  if (name === "dashboard") renderDashboard();
 }
 document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
@@ -595,7 +618,7 @@ $("convertSave").onclick = async () => {
       clientId, advisorUid: profile.uid, productId: q.p.id, productName: q.p.name, company: q.p.company,
       policyNo: $("cPolicyNo").value.trim(), coverage: q.coverage, smoker: q.smoker,
       mode: q.mode, premium: Math.round(q.annual * q.modeFactor), startDate: $("cStart").value,
-      status: "active", paid: [$("cStart").value], createdAt: Date.now()
+      status: "active", paid: [$("cStart").value], paidOn: {[$("cStart").value]: $("cStart").value}, createdAt: Date.now()
     });
     $("convertBox").classList.add("hide");
     await loadAll();
@@ -702,10 +725,11 @@ function showSchedule(id){
     const p = policies.find(x => x.id === back.dataset.pid);
     const paid = (Array.isArray(p.paid) ? p.paid : [p.startDate]).slice();
     const at = paid.indexOf(iso);
-    if (at >= 0) paid.splice(at, 1); else paid.push(iso);
+    const paidOn = Object.assign({}, p.paidOn); // date each payment was actually collected
+    if (at >= 0) { paid.splice(at, 1); delete paidOn[iso]; } else { paid.push(iso); paidOn[iso] = todayIso(); }
     e.target.disabled = true;
     try {
-      await orgRef().collection("policies").doc(p.id).update({paid});
+      await orgRef().collection("policies").doc(p.id).update({paid, paidOn});
       await loadAll();
       renderScheduleBody(back, p.id);
     } catch (err) { e.target.disabled = false; await showMessage(err.message); }
@@ -714,6 +738,83 @@ function showSchedule(id){
   document.body.appendChild(back);
 }
 $("policyRows").addEventListener("click", e => { if (e.target.dataset.sched) showSchedule(e.target.dataset.sched); });
+
+// ---------- dashboard ----------
+let advisorNames = null, advisorNamesFor = null;
+async function ensureAdvisorNames(){
+  if (advisorNames && advisorNamesFor === profile.uid) return;
+  advisorNames = {}; advisorNamesFor = profile.uid;
+  advisorNames[profile.uid] = profile.name;
+  if (!isAdmin()) return;
+  try {
+    const s = await db.collection("users").where("orgId","==",profile.orgId).get();
+    s.docs.forEach(d => advisorNames[d.id] = d.data().name);
+    renderDashboard();
+  } catch (e) { /* names stay as "Advisor" if users can't be read */ }
+}
+const premiumOf = p => Number(p.premium) || 0;
+function annualized(p){
+  const step = PAY_INTERVALS[String(p.mode || "").toLowerCase()] || 12;
+  return premiumOf(p) * 12 / step;
+}
+// payments marked before payment dates were recorded count in the month they were due
+const collectedOn = (p, iso) => (p.paidOn && p.paidOn[iso]) || iso;
+function dashboardData(){
+  const today = dayNum(todayIso()), month = todayIso().slice(0, 7);
+  const overdue = [], upcoming = [], byAdvisor = {};
+  let collected = 0;
+  policies.forEach(p => {
+    const adv = byAdvisor[p.advisorUid] || (byAdvisor[p.advisorUid] = {policies: 0, annual: 0, collected: 0});
+    (Array.isArray(p.paid) ? p.paid : [p.startDate]).forEach(iso => {
+      if (collectedOn(p, iso).slice(0, 7) === month) { collected += premiumOf(p); adv.collected += premiumOf(p); }
+    });
+    if (p.status !== "active") return;
+    adv.policies++; adv.annual += annualized(p);
+    const unpaid = policySchedule(p).filter(d => !d.paid);
+    const late = unpaid.filter(d => dayNum(d.iso) < today);
+    if (late.length) overdue.push({p, oldest: late[0].iso, days: today - dayNum(late[0].iso), count: late.length, amount: late.length * premiumOf(p)});
+    unpaid.forEach(d => { const diff = dayNum(d.iso) - today; if (diff >= 0 && diff <= 30) upcoming.push({p, iso: d.iso, diff}); });
+  });
+  overdue.sort((a, b) => b.days - a.days);
+  upcoming.sort((a, b) => a.diff - b.diff);
+  return {overdue, upcoming, byAdvisor, collected};
+}
+function renderDashboard(){
+  if (!profile) return;
+  ensureAdvisorNames();
+  const d = dashboardData();
+  const clientOf = id => clients.find(c => c.id === id) || {};
+  const advName = uid => (advisorNames && advisorNames[uid]) || "Advisor";
+  const sumPremium = list => list.reduce((s, x) => s + premiumOf(x.p), 0);
+  const up7 = d.upcoming.filter(x => x.diff <= 7);
+  const activeCount = policies.filter(p => p.status === "active").length;
+  const tile = (label, value, sub, warn) => '<div class="tile' + (warn ? " warn" : "") + '"><div class="meta">' + label + '</div><div class="tileVal">' + value + '</div><div class="meta">' + sub + "</div></div>";
+  $("dashTiles").innerHTML =
+    tile("Clients", clients.length, "") +
+    tile("Policies", activeCount, "active of " + policies.length) +
+    tile("Collected this month", peso(d.collected), "") +
+    tile("Overdue", d.overdue.length, peso(d.overdue.reduce((s, x) => s + x.amount, 0)), d.overdue.length > 0) +
+    tile("Due in 7 days", up7.length, peso(sumPremium(up7))) +
+    tile("Due in 30 days", d.upcoming.length, peso(sumPremium(d.upcoming)));
+  const who = p => (isAdmin() ? '<div class="meta">' + esc(advName(p.advisorUid)) + "</div>" : "");
+  const sched = p => '<button class="link" data-sched="' + p.id + '">Schedule</button>';
+  $("dashOverdue").innerHTML = d.overdue.map(x => {
+    const c = clientOf(x.p.clientId), st = dueState(x.oldest);
+    return "<tr><td><b>" + esc(c.name || "Unknown") + '</b><div class="meta">' + esc(c.contact || "") + "</div></td><td>" + esc(x.p.policyNo) + "</td><td>" + esc(x.p.productName) + who(x.p) +
+      "</td><td>" + esc(formatDisplay(x.oldest)) + '</td><td><span class="badge st-' + st.key + '">' + (st.key === "lapsed" ? "Lapsed" : "Overdue") + " " + x.days + "d</span>" +
+      (x.count > 1 ? '<div class="meta">' + x.count + " unpaid</div>" : "") + "</td><td>" + peso(x.amount) + "</td><td>" + sched(x.p) + "</td></tr>";
+  }).join("") || '<tr><td colspan="7" class="empty">No overdue payments.</td></tr>';
+  $("dashUpcoming").innerHTML = d.upcoming.map(x => {
+    const c = clientOf(x.p.clientId);
+    return "<tr><td>" + esc(formatDisplay(x.iso)) + '</td><td><span class="badge' + (x.diff <= 7 ? " st-soon" : "") + '">' + (x.diff === 0 ? "Today" : "In " + x.diff + " day" + (x.diff === 1 ? "" : "s")) + "</span></td><td><b>" +
+      esc(c.name || "Unknown") + '</b><div class="meta">' + esc(c.contact || "") + "</div></td><td>" + esc(x.p.policyNo) + "</td><td>" + esc(x.p.productName) + who(x.p) +
+      "</td><td>" + peso(premiumOf(x.p)) + "</td><td>" + sched(x.p) + "</td></tr>";
+  }).join("") || '<tr><td colspan="7" class="empty">Nothing due in the next 30 days.</td></tr>';
+  $("dashAdvisors").innerHTML = Object.keys(d.byAdvisor).map(uid => [uid, d.byAdvisor[uid]]).sort((a, b) => b[1].annual - a[1].annual).map(([uid, a]) =>
+    "<tr><td>" + esc(advName(uid)) + "</td><td>" + a.policies + "</td><td>" + peso(a.annual) + "</td><td>" + peso(a.collected) + "</td></tr>"
+  ).join("") || '<tr><td colspan="4" class="empty">No policies yet.</td></tr>';
+}
+$("tab-dashboard").addEventListener("click", e => { if (e.target.dataset.sched) showSchedule(e.target.dataset.sched); });
 
 // ---------- policies ----------
 function renderPolicies(){
