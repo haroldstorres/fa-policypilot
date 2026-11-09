@@ -54,6 +54,27 @@ input.dp{cursor:pointer}
 .dlg{background:#fff;border-radius:12px;padding:22px;max-width:380px;width:100%;box-shadow:0 12px 32px rgba(0,0,0,.25)}
 .dlg p{margin:0 0 18px}
 .dlgBtns{display:flex;justify-content:flex-end;gap:8px}
+textarea{width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font:inherit;resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.chip{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:4px 12px;cursor:pointer;font-size:13px;color:var(--ink);background:#fff}
+.chip input{width:auto;margin-right:6px}
+.dlg h4{margin:14px 0 4px}
+.dlg ul{margin:0;padding-left:20px}
+.liveRow{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.liveRow.shown{background:#fff6dc}
+#streamView{position:fixed;inset:0;overflow:auto;z-index:200}
+.streamPreview{height:460px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.stream{min-height:100%;padding:24px;box-sizing:border-box;color:var(--ink)}
+.sHead{display:inline-block;background:#fff;padding:6px 16px;border-radius:999px;font-weight:700;font-size:clamp(16px,3.6vw,26px);margin-bottom:14px}
+.sCard{background:#fff;border-radius:14px;padding:14px 18px;margin-bottom:12px}
+.sName{font-weight:700;font-size:clamp(20px,4.6vw,32px);line-height:1.2}
+.sMeta{color:var(--mute);font-size:clamp(13px,2.8vw,18px)}
+.sPrice{font-weight:700;font-size:clamp(16px,3.6vw,24px);margin-top:4px}
+.sSection{display:inline-block;background:var(--amber);padding:3px 14px;border-radius:999px;font-weight:700;margin:8px 0 10px}
+.sCard ul{margin:0;padding-left:24px;font-size:clamp(17px,3.8vw,26px)}
+.sCard li{margin-bottom:6px}
+.sIdle{background:#fff;border-radius:14px;padding:24px;text-align:center;font-size:clamp(20px,4.6vw,32px)}
+.sFoot{display:inline-block;background:#fff;border-radius:8px;padding:4px 10px;margin-top:6px;font-size:clamp(11px,2.4vw,14px);color:var(--mute)}
 @media(max-width:640px){.finder{grid-template-columns:1fr}.result{grid-template-columns:1fr}.price{text-align:left}}
 </style>
 </head>
@@ -76,6 +97,8 @@ input.dp{cursor:pointer}
   </div>
 </div>
 
+<div id="streamView" class="hide"></div>
+
 <div id="app" class="hide">
   <header>
     <h1><span id="brandName">PolicyPilot</span> <span id="orgTitle" class="meta"></span></h1>
@@ -83,6 +106,7 @@ input.dp{cursor:pointer}
       <button data-tab="quote" class="on">Quote</button>
       <button data-tab="clients">Clients</button>
       <button data-tab="policies">Policies</button>
+      <button data-tab="live">Live</button>
       <button data-tab="products" class="adminOnly">Products</button>
       <button data-tab="team" class="adminOnly">Team</button>
       <button id="logoutBtn">Sign out</button>
@@ -137,6 +161,41 @@ input.dp{cursor:pointer}
       <div class="panel" style="overflow-x:auto"><table><thead><tr><th>Policy no.</th><th>Client</th><th>Product</th><th>Coverage</th><th>Premium</th><th>Start</th><th>Status</th></tr></thead><tbody id="policyRows"></tbody></table></div>
     </section>
 
+    <section id="tab-live" class="hide">
+      <div class="panel">
+        <h3 style="margin-top:0">Live controls</h3>
+        <div class="form">
+          <div><label>Viewer age</label><input id="liveAge" type="number" min="0" max="100"></div>
+          <div><label>Viewer name (optional)</label><input id="liveName"></div>
+          <div><label>Coverage for estimates (PHP)</label><input id="liveCoverage" type="number" value="1000000" step="50000"></div>
+          <div><label>Payment mode</label><select id="liveMode"><option value="0.0917">Monthly</option><option value="0.27">Quarterly</option><option value="0.52">Semi-annual</option><option value="1">Annual</option></select></div>
+          <div><label>Background</label><select id="liveBg"><option value="green">Green screen</option><option value="dark">Dark (for testing)</option></select></div>
+          <div><label>&nbsp;</label><label class="chip"><input type="checkbox" id="liveShowPrices" checked> Show estimated prices</label></div>
+        </div>
+        <button class="btn" id="liveShowList">Show list on screen</button>
+        <button class="btn alt" id="liveClear">Clear screen</button>
+        <button class="btn alt" id="liveOpen">Open stream window</button>
+        <span class="err" id="liveMsg"></span>
+        <p class="note">In OBS, add the stream window with Window Capture and use a Chroma Key filter to remove the green.</p>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top:0">Policies for this age</h3>
+        <div class="chips" id="liveSections">
+          <label class="chip"><input type="radio" name="liveSection" value="inclusions" checked> Inclusions</label>
+          <label class="chip"><input type="radio" name="liveSection" value="riders"> Riders</label>
+          <label class="chip"><input type="radio" name="liveSection" value="exclusions"> Exclusions</label>
+          <label class="chip"><input type="radio" name="liveSection" value="terms"> Terms</label>
+          <label class="chip"><input type="radio" name="liveSection" value="charges"> Fees and charges</label>
+        </div>
+        <div id="liveProducts"></div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-top:0">Screen preview</h3>
+        <div id="livePreview" class="streamPreview"></div>
+        <p class="note" id="liveNotes"></p>
+      </div>
+    </section>
+
     <section id="tab-products" class="hide">
       <div class="panel">
         <h3 id="formTitle" style="margin-top:0">Add product</h3>
@@ -149,6 +208,14 @@ input.dp{cursor:pointer}
           <div><label>Max age</label><input id="fMax" type="number"></div>
           <div><label>Min coverage (PHP)</label><input id="fMinCov" type="number"></div>
           <div class="wide"><label>Rates: annual premium per 1,000 coverage, by age band</label><input id="fRates" placeholder="18-30:4.5, 31-40:6.2, 41-50:10.8"></div>
+          <div class="wide"><label>Summary</label><textarea id="fSummary" rows="2"></textarea></div>
+          <div><label>Inclusions (one per line)</label><textarea id="fInclusions" rows="5"></textarea></div>
+          <div><label>Riders (one per line)</label><textarea id="fRiders" rows="5"></textarea></div>
+          <div><label>Exclusions (one per line)</label><textarea id="fExclusions" rows="5"></textarea></div>
+          <div><label>Terms (one per line)</label><textarea id="fTerms" rows="5"></textarea></div>
+          <div><label>Fees and charges (one per line)</label><textarea id="fCharges" rows="5"></textarea></div>
+          <div><label>Brochure link</label><input id="fBrochure" placeholder="https://..."></div>
+          <div class="wide"><label>Host notes (talking points, never shown to viewers)</label><textarea id="fHostNotes" rows="3"></textarea></div>
         </div>
         <button class="btn" id="saveBtn">Save product</button>
         <button class="btn alt" id="cancelBtn">Clear form</button>
@@ -201,6 +268,7 @@ let editingProductId = null;
 let pickedQuote = null; // product + premium chosen for conversion
 let isSignUp = false;
 let busySigningUp = false;
+const STREAM_MODE = new URLSearchParams(location.search).get("stream") === "1";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -374,7 +442,7 @@ $("authBtn").onclick = async () => {
       const newOrg = db.collection("orgs").doc();
       orgId = newOrg.id; role = "admin";
       batch.set(newOrg, {name: orgName, ownerUid: uid, createdAt: Date.now()});
-      SAMPLE_PRODUCTS.forEach(p => batch.set(newOrg.collection("products").doc(), p));
+      SAMPLE_PRODUCTS.forEach(p => batch.set(newOrg.collection("products").doc(), Object.assign({summary: "Sample text only. Replace with the official product details.", inclusions: ["Sample item. Edit it in the Products tab."]}, p)));
     }
     batch.set(db.collection("users").doc(uid), {orgId, role, name, email});
     try {
@@ -395,7 +463,7 @@ $("authBtn").onclick = async () => {
 $("logoutBtn").onclick = () => auth.signOut();
 
 auth.onAuthStateChanged(async user => {
-  if (busySigningUp) return;
+  if (STREAM_MODE || busySigningUp) return;
   if (!user) { profile = null; showAuth(); return; }
   await startApp(user);
 });
@@ -425,13 +493,14 @@ async function loadAll(){
   policies = pSnap.docs.map(d => Object.assign({id: d.id}, d.data())).sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
   renderAll();
 }
-function renderAll(){ renderTypes(); renderResults(); renderClients(); renderPolicies(); renderProductRows(); }
+function renderAll(){ renderTypes(); renderResults(); renderClients(); renderPolicies(); renderProductRows(); renderLiveHost(); }
 
 // ---------- tabs ----------
 function showTab(name){
-  ["quote","clients","policies","products","team"].forEach(t => $("tab-" + t).classList.toggle("hide", t !== name));
+  ["quote","clients","policies","live","products","team"].forEach(t => $("tab-" + t).classList.toggle("hide", t !== name));
   document.querySelectorAll("nav button[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
   if (name === "team") loadTeam();
+  if (name === "live") renderLiveHost();
 }
 document.querySelectorAll("nav button[data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
@@ -468,7 +537,8 @@ function renderResults(){
     const price = it.annual === null ? '<span class="meta">No rate set</span>'
       : "<b>" + peso(it.annual * mode) + '</b><div class="meta">' + $("mode").selectedOptions[0].text.toLowerCase() + "</div>";
     const warn = coverage < p.minCov ? '<div class="err">Minimum coverage is ' + peso(p.minCov) + "</div>" : "";
-    const action = it.annual === null ? "" : '<div><button class="btn" data-pick="' + p.id + '">Convert to policy</button></div>';
+    const action = '<div style="margin-top:6px"><button class="btn alt" data-view="' + p.id + '">View details</button> ' +
+      (it.annual === null ? "" : '<button class="btn" data-pick="' + p.id + '">Convert to policy</button>') + "</div>";
     return '<div class="result"><div><h3>' + esc(p.name) + '</h3><div class="meta">' + esc(p.company) +
       '</div><div style="margin-top:6px"><span class="tag">' + esc(p.type) + '</span><span class="meta">' + esc(p.term) +
       " &middot; issue age " + p.minAge + "-" + p.maxAge + "</span></div>" + warn + '</div><div class="price">' + price + action + "</div></div>";
@@ -478,6 +548,7 @@ function renderResults(){
 
 // ---------- convert quote to policy ----------
 $("results").addEventListener("click", e => {
+  if (e.target.dataset.view) { showProductDetails(products.find(x => x.id === e.target.dataset.view)); return; }
   const id = e.target.dataset.pick;
   if (!id) return;
   const p = products.find(x => x.id === id);
@@ -588,7 +659,7 @@ function renderProductRows(){
 }
 function clearProductForm(){
   editingProductId = null;
-  ["fCompany","fName","fType","fTerm","fMin","fMax","fMinCov","fRates"].forEach(i => $(i).value = "");
+  ["fCompany","fName","fType","fTerm","fMin","fMax","fMinCov","fRates","fSummary","fInclusions","fRiders","fExclusions","fTerms","fCharges","fBrochure","fHostNotes"].forEach(i => $(i).value = "");
   $("formTitle").textContent = "Add product";
   $("formMsg").textContent = "";
 }
@@ -597,7 +668,10 @@ $("saveBtn").onclick = async () => {
   const p = {
     company: $("fCompany").value.trim(), name: $("fName").value.trim(), type: $("fType").value.trim(), term: $("fTerm").value.trim(),
     minAge: parseInt($("fMin").value, 10), maxAge: parseInt($("fMax").value, 10),
-    minCov: parseFloat($("fMinCov").value) || 0, rates: textToRates($("fRates").value)
+    minCov: parseFloat($("fMinCov").value) || 0, rates: textToRates($("fRates").value),
+    summary: $("fSummary").value.trim(), inclusions: linesToList($("fInclusions").value), riders: linesToList($("fRiders").value),
+    exclusions: linesToList($("fExclusions").value), terms: linesToList($("fTerms").value), charges: linesToList($("fCharges").value),
+    brochureUrl: $("fBrochure").value.trim(), hostNotes: $("fHostNotes").value.trim(), detailsUpdated: todayIso()
   };
   if (!p.name || !p.type || isNaN(p.minAge) || isNaN(p.maxAge)) { $("formMsg").textContent = "Name, type, min age and max age are required."; return; }
   if (p.minAge > p.maxAge) { $("formMsg").textContent = "Min age cannot be higher than max age."; return; }
@@ -616,6 +690,8 @@ $("rows").addEventListener("click", async e => {
     editingProductId = p.id;
     $("fCompany").value = p.company; $("fName").value = p.name; $("fType").value = p.type; $("fTerm").value = p.term;
     $("fMin").value = p.minAge; $("fMax").value = p.maxAge; $("fMinCov").value = p.minCov; $("fRates").value = ratesToText(p.rates);
+    $("fSummary").value = p.summary || ""; $("fBrochure").value = p.brochureUrl || ""; $("fHostNotes").value = p.hostNotes || "";
+    DETAIL_SECTIONS.forEach(([key]) => $("f" + key.charAt(0).toUpperCase() + key.slice(1)).value = (p[key] || []).join("\n"));
     $("formTitle").textContent = "Edit product";
     window.scrollTo(0, 0);
   }
@@ -643,6 +719,147 @@ $("invBtn").onclick = async () => {
     loadTeam();
   } catch (e) { $("invMsg").textContent = e.message; }
 };
+// ---------- product details ----------
+const DETAIL_SECTIONS = [["inclusions","Inclusions"],["riders","Riders"],["exclusions","Exclusions"],["terms","Terms"],["charges","Fees and charges"]];
+const linesToList = text => text.split("\n").map(x => x.trim()).filter(Boolean);
+
+function showProductDetails(p){
+  let body = p.summary ? "<p>" + esc(p.summary) + "</p>" : "";
+  DETAIL_SECTIONS.forEach(([key, title]) => {
+    const lines = p[key] || [];
+    if (lines.length) body += "<h4>" + title + "</h4><ul>" + lines.map(l => "<li>" + esc(l) + "</li>").join("") + "</ul>";
+  });
+  if (!body) body = '<p class="meta">No details added yet. An admin can add them in the Products tab.</p>';
+  if (p.brochureUrl && /^https?:\/\//i.test(p.brochureUrl)) body += '<p><a href="' + esc(p.brochureUrl) + '" target="_blank" rel="noopener">Open brochure</a></p>';
+  if (p.detailsUpdated) body += '<p class="note">Details last updated ' + esc(formatDisplay(p.detailsUpdated)) + "</p>";
+  const back = document.createElement("div");
+  back.className = "dlgBack";
+  back.innerHTML = '<div class="dlg" style="max-width:560px;max-height:85vh;overflow:auto"><h3 style="margin:0">' + esc(p.name) + '</h3><div class="meta" style="margin-bottom:10px">' +
+    esc(p.company) + " - " + esc(p.type) + " - " + esc(p.term) + "</div>" + body + '<div class="dlgBtns"><button class="btn" data-close="1">Close</button></div></div>';
+  back.addEventListener("click", e => { if (e.target === back || e.target.dataset.close) back.remove(); });
+  document.body.appendChild(back);
+}
+
+// ---------- live mode ----------
+// host controls here, the stream window only displays what the host sends
+const liveChannel = new BroadcastChannel("policypilot-live");
+const liveState = {mode: "idle", productId: null, age: null, name: ""};
+
+function liveSettings(){
+  return {
+    coverage: parseFloat($("liveCoverage").value) || 0,
+    modeFactor: parseFloat($("liveMode").value),
+    modeLabel: $("liveMode").selectedOptions[0].text.toLowerCase(),
+    showPrices: $("liveShowPrices").checked,
+    bg: $("liveBg").value,
+    section: document.querySelector('input[name="liveSection"]:checked').value
+  };
+}
+function eligibleProducts(age, settings){
+  return products.filter(p => age >= p.minAge && age <= p.maxAge).map(p => {
+    const rate = rateFor(p, age);
+    return {p, price: rate === null ? null : settings.coverage / 1000 * rate * settings.modeFactor};
+  }).sort((a, b) => (a.price === null) - (b.price === null) || a.price - b.price);
+}
+
+function buildLivePayload(){
+  const set = liveSettings();
+  const payload = {mode: liveState.mode, bg: set.bg};
+  if (liveState.mode === "list") {
+    payload.age = liveState.age;
+    payload.name = liveState.name;
+    payload.items = eligibleProducts(liveState.age, set).map(it => ({
+      name: it.p.name, company: it.p.company, type: it.p.type, term: it.p.term,
+      price: set.showPrices && it.price !== null ? "from " + peso(it.price) + " " + set.modeLabel : ""
+    }));
+  }
+  if (liveState.mode === "detail") {
+    const p = products.find(x => x.id === liveState.productId);
+    if (!p) payload.mode = "idle";
+    else {
+      payload.product = {name: p.name, company: p.company, type: p.type, term: p.term, summary: p.summary || ""};
+      payload.sectionTitle = DETAIL_SECTIONS.find(x => x[0] === set.section)[1];
+      payload.lines = p[set.section] || [];
+    }
+  }
+  return payload;
+}
+
+// same markup for the preview and the stream window
+function streamHtml(d){
+  const bg = d.bg === "dark" ? "#10231f" : "#00ff00";
+  let body = "";
+  if (d.mode === "list") {
+    body = '<div class="sHead">' + (d.name ? esc(d.name) + " - " : "") + "Age " + d.age + "</div>";
+    body += d.items.map(it => '<div class="sCard"><div class="sName">' + esc(it.name) + '</div><div class="sMeta">' + esc(it.company) + " - " + esc(it.type) + " - " + esc(it.term) + "</div>" +
+      (it.price ? '<div class="sPrice">' + esc(it.price) + "</div>" : "") + "</div>").join("") || '<div class="sIdle">No policy available for this age.</div>';
+  } else if (d.mode === "detail") {
+    body = '<div class="sCard"><div class="sName">' + esc(d.product.name) + '</div><div class="sMeta">' + esc(d.product.company) + " - " + esc(d.product.type) + " - " + esc(d.product.term) + "</div>" +
+      (d.product.summary ? '<div class="sMeta" style="margin-top:6px">' + esc(d.product.summary) + "</div>" : "") +
+      '<div class="sSection">' + esc(d.sectionTitle) + "</div>" +
+      (d.lines.length ? "<ul>" + d.lines.map(l => "<li>" + esc(l) + "</li>").join("") + "</ul>" : '<div class="sMeta">No details added yet.</div>') + "</div>";
+  } else {
+    body = '<div class="sIdle"><b>Comment your age</b><br>to see which policies you can get</div>';
+  }
+  return '<div class="stream" style="background:' + bg + '">' + body + '<div class="sFoot">Estimates only. Not an official quote. See the official policy documents.</div></div>';
+}
+
+function pushLive(){
+  const payload = buildLivePayload();
+  $("livePreview").innerHTML = streamHtml(payload);
+  liveChannel.postMessage({type: "state", payload});
+  const shown = payload.mode === "detail" ? products.find(x => x.id === liveState.productId) : null;
+  $("liveNotes").textContent = shown && shown.hostNotes ? "Host notes: " + shown.hostNotes : "";
+  renderLiveHost();
+}
+
+function renderLiveHost(){
+  const age = parseInt($("liveAge").value, 10);
+  const box = $("liveProducts");
+  if (isNaN(age) || age < 0 || age > 100) { box.innerHTML = '<div class="empty">Enter the viewer age to see the policies for this age.</div>'; return; }
+  const set = liveSettings();
+  const items = eligibleProducts(age, set);
+  box.innerHTML = items.map(it => '<div class="liveRow' + (liveState.mode === "detail" && liveState.productId === it.p.id ? " shown" : "") + '"><div><b>' + esc(it.p.name) +
+    '</b><div class="meta">' + esc(it.p.company) + " - " + esc(it.p.type) + (it.price !== null ? " - from " + peso(it.price) + " " + set.modeLabel : "") +
+    '</div></div><button class="btn alt" data-live-detail="' + it.p.id + '">Show details</button></div>').join("") ||
+    '<div class="empty">No policy available for age ' + age + ".</div>";
+}
+
+$("liveShowList").onclick = () => {
+  const age = parseInt($("liveAge").value, 10);
+  if (isNaN(age) || age < 0 || age > 100) { $("liveMsg").textContent = "Enter a valid age from 0 to 100."; return; }
+  $("liveMsg").textContent = "";
+  Object.assign(liveState, {mode: "list", age, name: $("liveName").value.trim()});
+  pushLive();
+};
+$("liveClear").onclick = () => { liveState.mode = "idle"; pushLive(); };
+$("liveOpen").onclick = () => {
+  const win = window.open(location.pathname + "?stream=1", "policypilotStream", "width=540,height=960");
+  $("liveMsg").textContent = win ? "" : "The stream window was blocked. Allow pop-ups for this site and try again.";
+};
+$("liveProducts").addEventListener("click", e => {
+  const id = e.target.dataset.liveDetail;
+  if (!id) return;
+  Object.assign(liveState, {mode: "detail", productId: id});
+  pushLive();
+});
+$("liveAge").addEventListener("input", renderLiveHost);
+$("liveAge").addEventListener("keydown", e => { if (e.key === "Enter") $("liveShowList").click(); });
+["liveCoverage","liveMode","liveShowPrices","liveBg"].forEach(id => $(id).addEventListener("input", () => { renderLiveHost(); pushLive(); }));
+document.querySelectorAll('input[name="liveSection"]').forEach(r => r.addEventListener("change", pushLive));
+
+liveChannel.onmessage = e => {
+  if (STREAM_MODE && e.data.type === "state") $("streamView").innerHTML = streamHtml(e.data.payload);
+  if (!STREAM_MODE && e.data.type === "hello") pushLive();
+};
+if (STREAM_MODE) {
+  document.body.style.margin = "0";
+  $("streamView").classList.remove("hide");
+  $("streamView").innerHTML = streamHtml({mode: "idle", bg: "green"});
+  liveChannel.postMessage({type: "hello"});
+} else {
+  $("livePreview").innerHTML = streamHtml({mode: "idle", bg: "green"});
+}
 </script>
 </body>
 </html>
